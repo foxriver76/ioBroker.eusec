@@ -61,7 +61,7 @@ class euSec extends utils.Adapter {
         this.on("ready", this.onReady.bind(this));
         this.on("stateChange", this.onStateChange.bind(this));
         // this.on("objectChange", this.onObjectChange.bind(this));
-        // this.on("message", this.onMessage.bind(this));
+        this.on("message", this.onMessage.bind(this));
         this.on("unload", this.onUnload.bind(this));
     }
     /**
@@ -433,21 +433,39 @@ class euSec extends utils.Adapter {
             this.logger.debug(`state ${id} deleted`);
         }
     }
-    // If you need to accept messages in your adapter, uncomment the following block and the corresponding line in the constructor.
-    // /**
-    //  * Some message was sent to this instance over message box. Used by email, pushover, text2speech, ...
-    //  * Using this method requires "common.message" property to be set to true in io-package.json
-    //  */
-    // private onMessage(obj: ioBroker.Message): void {
-    //     if (typeof obj === "object" && obj.message) {
-    //         if (obj.command === "send") {
-    //             // e.g. send email or pushover or whatever
-    //             this.log.info("send command");
-    //             // Send response in callback if required
-    //             if (obj.callback) this.sendTo(obj.from, obj.command, "Message received", obj.callback);
-    //         }
-    //     }
-    // }
+    /**
+     * Some message was sent to this instance over message box. Used by email, pushover, text2speech, ...
+     * Using this method requires "common.message" property to be set to true in io-package.json
+     */
+    async onMessage(obj) {
+        if (typeof obj === "object" && obj.message) {
+            if (obj.command === "talkback" && typeof obj.message === "object") {
+                const message = obj.message;
+                this.log.info(`Talkback recevied: ${JSON.stringify(message)}`);
+                // TODO: outsource in method
+                // promise that waits for start of talkback stream and sends data
+                const sendTalkbackPromise = new Promise(resolve => {
+                    const listener = this.eufy.on("station talkback start", (async (station, device, talkbackStream) => {
+                        talkbackStream.write(message.data);
+                        await this.eufy.stopStationTalkback(message.deviceSN);
+                        this.eufy.removeListener("station talkback start", listener);
+                        resolve();
+                    }));
+                });
+                await this.eufy.startStationTalkback(message.deviceSN);
+                await sendTalkbackPromise;
+                if (obj.callback) {
+                    this.sendTo(obj.from, obj.command, "Talkback received", obj.callback);
+                }
+            }
+            else {
+                this.log.warn(`Unknown message command received: ${obj.command}`);
+            }
+        }
+        else {
+            this.log.warn(`Invalid message received; ${JSON.stringify(obj)}`);
+        }
+    }
     getStateCommon(property) {
         const state = {
             name: property.label,

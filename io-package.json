@@ -141,6 +141,7 @@
         "dataSource": "poll",
         "materialize": true,
         "webExtension": "build/lib/web.js",
+        "messagebox": true,
         "dependencies": [
             {
                 "js-controller": ">=3.1.4",
