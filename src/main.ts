@@ -486,7 +486,7 @@ export class euSec extends utils.Adapter {
 
                 this.log.info(`Talkback recevied: ${JSON.stringify(message)}`);
 
-                const args = `-re -i ${mp3Path} -acodec aac -ac 1 -ar 16k -b:a 16k -f adts pipe:1`;
+                const args = `-re -i ${mp3Path} -acodec aac -ac 1 -ar 16k -b:a 32k -f adts pipe:1`;
 
                 // TODO: outsource in method
                 // promise that waits for start of talkback stream and sends data
