@@ -5,6 +5,7 @@
 import * as utils from "@iobroker/adapter-core";
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { strict } from "assert";
+import { spawn } from "child_process";
 import * as path from "path";
 import { Camera, Device, Station, PushMessage, P2PConnectionType, EufySecurity, EufySecurityConfig, CommandResult, CommandType, ErrorCode, PropertyValue, PropertyName, StreamMetadata, PropertyMetadataNumeric, PropertyMetadataAny, CommandName, PanTiltDirection, DeviceNotFoundError, LoginOptions } from "eufy-security-client";
 import { getAlpha2Code as getCountryCode } from "i18n-iso-countries"
@@ -459,18 +460,46 @@ export class euSec extends utils.Adapter {
         if (typeof obj === "object" && obj.message) {
             if (obj.command === "talkback" && typeof obj.message === "object") {
                 const message = obj.message;
+                const ffmpegPath = message.ffmpegPath;
+                const mp3Path = message.mp3Path;
 
                 this.log.info(`Talkback recevied: ${JSON.stringify(message)}`);
+
+                const args = "-re -i " + mp3Path + " " +
+                    "-acodec aac " +
+                    "-ac 1 " +
+                    "-ar 16k " +
+                    "-b:a 16k " +
+                    "-f adts pipe:1";
 
                 // TODO: outsource in method
                 // promise that waits for start of talkback stream and sends data
                 const sendTalkbackPromise = new Promise<void>(resolve => {
                     const listener = this.eufy.on("station talkback start", (async (station, device, talkbackStream) => {
+                        const ffmpeg = spawn(ffmpegPath, args.split(/\s+/), { env: process.env });
 
-                        talkbackStream.write(message.data);
-                        await this.eufy.stopStationTalkback(message.deviceSN);
-                        this.eufy.removeListener("station talkback start", listener as any);
-                        resolve();
+                        ffmpeg.stdout.pipe(talkbackStream);
+
+                        ffmpeg.on("error", (err) => {
+                            this.log.info(`ffmpeg error: ${err}`);
+                        });
+
+                        ffmpeg.stderr.on("data", (data) => {
+                            data.toString().split("\n").forEach((line: string) => {
+                                if (line.length > 0) {
+                                    this.log.info(line);
+                                }
+                            });
+                        });
+
+                        ffmpeg.on("close", async () => {
+                            this.log.info("ffmpeg closed.");
+                            await this.eufy.stopStationTalkback(message.deviceSN);
+                            this.eufy.removeListener("station talkback start", listener as any);
+                            resolve();
+                        });
+
+
                     }));
                 });
 
