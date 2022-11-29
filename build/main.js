@@ -458,21 +458,31 @@ class euSec extends utils.Adapter {
                         ffmpeg.stderr.on("data", (data) => {
                             data.toString().split("\n").forEach((line) => {
                                 if (line.length > 0) {
-                                    this.log.info(line);
+                                    this.log.debug(line);
                                 }
                             });
                         });
                         ffmpeg.on("close", async () => {
                             this.log.info("ffmpeg closed.");
-                            await this.eufy.stopStationTalkback(message.deviceSN);
+                            try {
+                                await this.eufy.stopStationTalkback(message.deviceSN);
+                            }
+                            catch (e) {
+                                this.log.error(`Error stopping talkback stream: ${e.message}`);
+                            }
                             this.eufy.removeListener("station talkback start", listenerFun);
                             resolve();
                         });
                     });
                     this.eufy.on("station talkback start", listenerFun);
                 });
-                await this.eufy.startStationTalkback(message.deviceSN);
-                await sendTalkbackPromise;
+                try {
+                    await this.eufy.startStationTalkback(message.deviceSN);
+                    await sendTalkbackPromise;
+                }
+                catch (e) {
+                    this.log.error(`Error starting talkback stream: ${e.message}`);
+                }
                 if (obj.callback) {
                     this.sendTo(obj.from, obj.command, "Talkback received", obj.callback);
                 }
