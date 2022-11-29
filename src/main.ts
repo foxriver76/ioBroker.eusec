@@ -7,7 +7,28 @@ import * as utils from "@iobroker/adapter-core";
 import { strict } from "assert";
 import { spawn } from "child_process";
 import * as path from "path";
-import { Camera, Device, Station, PushMessage, P2PConnectionType, EufySecurity, EufySecurityConfig, CommandResult, CommandType, ErrorCode, PropertyValue, PropertyName, StreamMetadata, PropertyMetadataNumeric, PropertyMetadataAny, CommandName, PanTiltDirection, DeviceNotFoundError, LoginOptions } from "eufy-security-client";
+import {
+    Camera,
+    Device,
+    Station,
+    PushMessage,
+    P2PConnectionType,
+    EufySecurity,
+    EufySecurityConfig,
+    CommandResult,
+    CommandType,
+    ErrorCode,
+    PropertyValue,
+    PropertyName,
+    StreamMetadata,
+    PropertyMetadataNumeric,
+    PropertyMetadataAny,
+    CommandName,
+    PanTiltDirection,
+    DeviceNotFoundError,
+    LoginOptions,
+    TalkbackStream
+} from "eufy-security-client";
 import { getAlpha2Code as getCountryCode } from "i18n-iso-countries"
 import { isValid as isValidLanguageCode } from "@cospired/i18n-iso-languages"
 import fse from "fs-extra";
@@ -465,17 +486,12 @@ export class euSec extends utils.Adapter {
 
                 this.log.info(`Talkback recevied: ${JSON.stringify(message)}`);
 
-                const args = "-re -i " + mp3Path + " " +
-                    "-acodec aac " +
-                    "-ac 1 " +
-                    "-ar 16k " +
-                    "-b:a 16k " +
-                    "-f adts pipe:1";
+                const args = `-re -i ${mp3Path} -acodec aac -ac 1 -ar 16k -b:a 16k -f adts pipe:1`;
 
                 // TODO: outsource in method
                 // promise that waits for start of talkback stream and sends data
                 const sendTalkbackPromise = new Promise<void>(resolve => {
-                    const listener = this.eufy.on("station talkback start", (async (station, device, talkbackStream) => {
+                    const listenerFun = (async (station: Station, device: Device, talkbackStream: TalkbackStream) => {
                         const ffmpeg = spawn(ffmpegPath, args.split(/\s+/), { env: process.env });
 
                         ffmpeg.stdout.pipe(talkbackStream);
@@ -495,12 +511,12 @@ export class euSec extends utils.Adapter {
                         ffmpeg.on("close", async () => {
                             this.log.info("ffmpeg closed.");
                             await this.eufy.stopStationTalkback(message.deviceSN);
-                            this.eufy.removeListener("station talkback start", listener as any);
+                            this.eufy.removeListener("station talkback start", listenerFun);
                             resolve();
                         });
+                    })
 
-
-                    }));
+                    this.eufy.on("station talkback start", listenerFun);
                 });
 
                 await this.eufy.startStationTalkback(message.deviceSN);
