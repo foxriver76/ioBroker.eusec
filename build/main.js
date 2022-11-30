@@ -450,6 +450,7 @@ class euSec extends utils.Adapter {
                 // promise that waits for start of talkback stream and sends data
                 const sendTalkbackPromise = new Promise(resolve => {
                     const listenerFun = (async (station, device, talkbackStream) => {
+                        this.eufy.removeListener("station talkback start", listenerFun);
                         const ffmpeg = (0, child_process_1.spawn)(ffmpegPath, args.split(/\s+/), { env: process.env });
                         ffmpeg.stdout.pipe(talkbackStream);
                         ffmpeg.on("error", (err) => {
@@ -470,7 +471,6 @@ class euSec extends utils.Adapter {
                             catch (e) {
                                 this.log.error(`Error stopping talkback stream: ${e.message}`);
                             }
-                            this.eufy.removeListener("station talkback start", listenerFun);
                             resolve();
                         });
                     });
